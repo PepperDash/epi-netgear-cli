@@ -29,7 +29,7 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 {
   "deviceKey": "NetgearCLI",
   "methodName": "ChangeVlan",
-  "params": ["Gig0/1", "password", 10]
+  "params": ["0/1", 2]
 }
 ```
 

@@ -186,9 +186,9 @@
     </ItemGroup>
     <ItemGroup>
         <Compile Include="ISwitchCommands.cs" />
-        <Compile Include="Netgear\NetgearCliConfigObject.cs" />
-        <Compile Include="Netgear\NetgearCliDevice.cs" />
-        <Compile Include="Netgear\NetgearCliFactory.cs" />
+        <Compile Include="NetgearCliConfigObject.cs" />
+        <Compile Include="NetgearCliDevice.cs" />
+        <Compile Include="NetgearCliFactory.cs" />
         <Compile Include="Properties\AssemblyInfo.cs"/>
         <Compile Include="TransmitMessage.cs" />
     </ItemGroup>
