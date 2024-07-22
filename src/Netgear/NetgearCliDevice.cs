@@ -20,7 +20,7 @@ namespace Essentials.Plugin.Netgear.Cli
     /// <example>
     /// "EssentialsPluginDeviceTemplate" renamed to "SamsungMdcDevice"
     /// </example>
-    public class NetgearCliDevice : EssentialsDevice
+    public class NetgearCliDevice : EssentialsDevice, ISwitchCommands
     {
         /// <summary>
         /// It is often desirable to store the config
@@ -68,6 +68,7 @@ namespace Essentials.Plugin.Netgear.Cli
         /// </summary>
         public const string DELIMITER = "\r";
         private const int WAITTIMEMS = 2000;
+        public const int MAX_VLANS = 4093;
 
 
         /// <summary>
@@ -84,12 +85,10 @@ namespace Essentials.Plugin.Netgear.Cli
                 if (value)
                 {
                     _comms.Connect();
-                    //_commsMonitor.Start();
                 }
                 else
                 {
                     _comms.Disconnect();
-                    //_commsMonitor.Stop();
                 }
             }
         }
@@ -160,12 +159,14 @@ namespace Essentials.Plugin.Netgear.Cli
                 return;
             }
             _comms.Connect();
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, DELIMITER));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "conf t"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"in {port}"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"switchport access vlan {vlanID}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan acceptframe all"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanID}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanID}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
