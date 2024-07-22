@@ -6,7 +6,7 @@
     <Company>PepperDash Technologies</Company>
     <Product>PepperDash Netgear CLI Switcher</Product>
     <Copyright>Copyright ©  2024</Copyright>
-    <RepositoryUrl>https://github.com/PepperDash/epi-Netgear-cli.4Series.git</RepositoryUrl>
+    <RepositoryUrl>https://github.com/PepperDash/epi-Netgear-cli.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>Crestron; 4series</PackageTags>
     <PackageOutputPath>../output</PackageOutputPath>
