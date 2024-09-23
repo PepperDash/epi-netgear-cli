@@ -3,3 +3,6 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+/.vs/epi-netgear-cli.4Series
+*.cplz
+/output/Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI.1.0.0-local.nupkg
