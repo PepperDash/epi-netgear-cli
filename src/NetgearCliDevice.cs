@@ -135,14 +135,21 @@ namespace Essentials.Plugin.Netgear.Cli
             {
                 // device comms is IP **ELSE** device comms is RS232
                 socket.ConnectionChange += socket_ConnectionChange;
-                Connect = true;
             }
 
             _comms.TextReceived += _comms_TextReceived;
         }
 
+        public override void Initialize()
+        {
+            Connect = true;
+        }
+
+
+
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
         {
+            //placeholder, add response to password prompt here
         }
 
         private void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
@@ -158,19 +165,17 @@ namespace Essentials.Plugin.Netgear.Cli
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
                 return;
             }
-            _comms.Connect();
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));
+            //TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
+            /*TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));*/
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan acceptframe all"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanID}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanID}"));
+            /*TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
-            _comms.Disconnect();
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));*/
         }
 
         #endregion
