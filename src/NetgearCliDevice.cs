@@ -1,12 +1,14 @@
 ﻿// For Basic SIMPL# Classes
 // For Basic SIMPL#Pro classes
 
+using System.Net.Sockets;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 using PepperDash.Essentials.Core.Queues;
 using System.Threading;
 using System.Threading.Tasks;
+using Crestron.SimplSharp.CrestronSockets;
 using Essentials.Plugin.Netgear.Cli;
 
 namespace Essentials.Plugin.Netgear.Cli
@@ -35,7 +37,7 @@ namespace Essentials.Plugin.Netgear.Cli
         {
             get
             {
-                if(_config.Password != null)
+                if (_config.Password != null)
                 {
                     return _config.Password;
                 }
@@ -45,7 +47,6 @@ namespace Essentials.Plugin.Netgear.Cli
                 }
             }
         }
-
 
 
         /// <summary>
@@ -67,6 +68,7 @@ namespace Essentials.Plugin.Netgear.Cli
         /// Set this value to that of the delimiter used by the API (if applicable)
         /// </summary>
         public const string DELIMITER = "\r";
+
         private const int WAITTIMEMS = 2000;
         public const int MAX_VLANS = 4093;
 
@@ -125,10 +127,11 @@ namespace Essentials.Plugin.Netgear.Cli
             Debug.Console(0, this, "Constructing new {0} instance", name);
 
             _config = config;
-            
+
             _comms = comms;
 
-            TransmitQueue = new GenericQueue($"{key}-txQueue", WAITTIMEMS, Crestron.SimplSharpPro.CrestronThread.Thread.eThreadPriority.MediumPriority, 100);
+            TransmitQueue = new GenericQueue($"{key}-txQueue", WAITTIMEMS,
+                Crestron.SimplSharpPro.CrestronThread.Thread.eThreadPriority.MediumPriority, 100);
 
             var socket = _comms as ISocketStatus;
             if (socket != null)
@@ -143,17 +146,24 @@ namespace Essentials.Plugin.Netgear.Cli
         public override void Initialize()
         {
             Connect = true;
-        }
 
+            switch (_comms)
+            {
+                case PepperDash.Core.GenericSshClient sshClient:
+                    sshClient.AutoReconnect = true; //default interval is 5000ms
+                    break;
+            }
+        }
 
 
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
         {
-            if(e.Text.Contains("Password:"))
+            if (e.Text.Contains("Password:"))
             {
                 TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
             }
-            if(e.Text.Contains("Access denied"))
+
+            if (e.Text.Contains("Access denied"))
             {
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Access Denied. Please check the password");
             }
@@ -164,7 +174,7 @@ namespace Essentials.Plugin.Netgear.Cli
             Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {0}",
                 args.Client.ClientStatus.ToString());
         }
-        
+
         private void EnableConfigMode()
         {
             TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
@@ -173,25 +183,28 @@ namespace Essentials.Plugin.Netgear.Cli
 
         private void BackOut(int numExits)
         {
-            for(int i = 0; i < numExits; i++)
+            for (int i = 0; i < numExits; i++)
             {
                 TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
             }
         }
-        
+
         public void ChangeVlan(string port, int vlanID)
         {
-            if(_password == null)
+            if (_password == null)
             {
-                Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
+                    "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
                 return;
             }
-            
-            if(_comms.IsConnected == false)
+
+            if (_comms.IsConnected == false)
             {
-                Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Device is not connected. Please check the connection");
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
+                    "Device is not connected. Please check the connection");
                 return;
             }
+
             EnableConfigMode();
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
