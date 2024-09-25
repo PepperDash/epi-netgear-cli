@@ -149,13 +149,34 @@ namespace Essentials.Plugin.Netgear.Cli
 
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
         {
-            //placeholder, add response to password prompt here
+            if(e.Text.Contains("Password:"))
+            {
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
+            }
+            if(e.Text.Contains("Access denied"))
+            {
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Access Denied. Please check the password");
+            }
         }
 
         private void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
         {
             Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {0}",
                 args.Client.ClientStatus.ToString());
+        }
+        
+        private void EnableConfigMode()
+        {
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));
+        }
+
+        private void BackOut(int numExits)
+        {
+            for(int i = 0; i < numExits; i++)
+            {
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
+            }
         }
         
         public void ChangeVlan(string port, int vlanID)
@@ -165,17 +186,19 @@ namespace Essentials.Plugin.Netgear.Cli
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
                 return;
             }
-            //TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
-            /*TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));*/
+            
+            if(_comms.IsConnected == false)
+            {
+                Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Device is not connected. Please check the connection");
+                return;
+            }
+            EnableConfigMode();
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan acceptframe all"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanID}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanID}"));
-            /*TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));*/
+            BackOut(3);
         }
 
         #endregion
