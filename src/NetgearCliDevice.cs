@@ -141,18 +141,18 @@ namespace Essentials.Plugin.Netgear.Cli
             }
 
             _comms.TextReceived += _comms_TextReceived;
-        }
-
-        public override void Initialize()
-        {
-            Connect = true;
-
+            
             switch (_comms)
             {
                 case PepperDash.Core.GenericSshClient sshClient:
                     sshClient.AutoReconnect = true; //default interval is 5000ms
                     break;
             }
+        }
+
+        public override void Initialize()
+        {
+            Connect = true;
         }
 
 
