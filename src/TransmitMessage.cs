@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core.Queues;
 
 namespace Essentials.Plugin.Netgear.Cli
@@ -24,6 +25,9 @@ namespace Essentials.Plugin.Netgear.Cli
             try
             {
                 if (_comms == null) return;
+
+                _comms.LogInformation("Sending {message}", _messageToSend);
+
                 _comms.SendText(_messageToSend + NetgearCliDevice.DELIMITER);
             }
             catch (Exception e)
