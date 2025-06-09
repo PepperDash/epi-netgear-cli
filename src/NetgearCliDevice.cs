@@ -137,7 +137,7 @@ namespace Essentials.Plugin.Netgear.Cli
             if (socket != null)
             {
                 // device comms is IP **ELSE** device comms is RS232
-                socket.ConnectionChange += socket_ConnectionChange;
+                socket.ConnectionChange += Socket_ConnectionChange;
             }
 
             _comms.TextReceived += _comms_TextReceived;
@@ -150,10 +150,12 @@ namespace Essentials.Plugin.Netgear.Cli
             }
         }
 
-        public override void Initialize()
+        public override bool CustomActivate()
         {
+            // wouldn't normally do this, but there are situations where commands are being sent to the switch as part of the post activation sequence. The SSH connection needs to be connected in those situations.
             Connect = true;
-        }
+            return base.CustomActivate();
+        }        
 
 
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
@@ -169,9 +171,9 @@ namespace Essentials.Plugin.Netgear.Cli
             }
         }
 
-        private void socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
+        private void Socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
         {
-            Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {0}",
+            Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {status}",this, 
                 args.Client.ClientStatus.ToString());
         }
 
@@ -194,14 +196,14 @@ namespace Essentials.Plugin.Netgear.Cli
             if (_password == null)
             {
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
-                    "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
+                    "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH", this);
                 return;
             }
 
-            if (_comms.IsConnected == false)
+            if (_comms is ISocketStatus && !_comms.IsConnected)
             {
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
-                    "Device is not connected. Please check the connection");
+                    "Device is not connected. Please check the connection", this);
                 return;
             }
 
