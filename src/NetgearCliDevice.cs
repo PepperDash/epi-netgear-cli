@@ -1,15 +1,8 @@
-﻿// For Basic SIMPL# Classes
-// For Basic SIMPL#Pro classes
-
-using System.Net.Sockets;
-using PepperDash.Core;
+﻿using PepperDash.Core;
+using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
-using PepperDash.Essentials.Core.Bridges;
+using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
-using System.Threading;
-using System.Threading.Tasks;
-using Crestron.SimplSharp.CrestronSockets;
-using Essentials.Plugin.Netgear.Cli;
 
 namespace Essentials.Plugin.Netgear.Cli
 {
@@ -22,7 +15,7 @@ namespace Essentials.Plugin.Netgear.Cli
     /// <example>
     /// "EssentialsPluginDeviceTemplate" renamed to "SamsungMdcDevice"
     /// </example>
-    public class NetgearCliDevice : EssentialsDevice, ISwitchCommands
+    public class NetgearCliDevice : EssentialsDevice, INetworkSwitchPoeVlanManager
     {
         /// <summary>
         /// It is often desirable to store the config
@@ -59,10 +52,6 @@ namespace Essentials.Plugin.Netgear.Cli
         // TODO [ ] Add, modify, remove properties and fields as needed for the plugin being developed
         private readonly IBasicCommunication _comms;
         //private readonly GenericCommunicationMonitor _commsMonitor;
-
-        // _comms gather for ASCII based API's
-        // TODO [ ] If not using an ASCII based API, delete the properties below
-        private readonly CommunicationGather _commsGather;
 
         /// <summary>
         /// Set this value to that of the delimiter used by the API (if applicable)
@@ -124,7 +113,7 @@ namespace Essentials.Plugin.Netgear.Cli
         public NetgearCliDevice(string key, string name, NetgearCliConfigObject config, IBasicCommunication comms)
             : base(key, name)
         {
-            Debug.Console(0, this, "Constructing new {0} instance", name);
+            this.LogInformation("Constructing new {0} instance", name);
 
             _config = config;
 
@@ -141,7 +130,7 @@ namespace Essentials.Plugin.Netgear.Cli
             }
 
             _comms.TextReceived += _comms_TextReceived;
-            
+
             switch (_comms)
             {
                 case PepperDash.Core.GenericSshClient sshClient:
@@ -155,7 +144,7 @@ namespace Essentials.Plugin.Netgear.Cli
             // wouldn't normally do this, but there are situations where commands are being sent to the switch as part of the post activation sequence. The SSH connection needs to be connected in those situations.
             Connect = true;
             return base.CustomActivate();
-        }        
+        }
 
 
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
@@ -173,7 +162,7 @@ namespace Essentials.Plugin.Netgear.Cli
 
         private void Socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
         {
-            Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {status}",this, 
+            Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {status}", this,
                 args.Client.ClientStatus.ToString());
         }
 
@@ -193,17 +182,25 @@ namespace Essentials.Plugin.Netgear.Cli
 
         public void ChangeVlan(string port, int vlanID)
         {
+            SetPortVlan(port, (uint)vlanID);
+        }
+
+        public int GetPortCurrentVlan(string port)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public void SetPortVlan(string port, uint vlanId)
+        {
             if (_password == null)
             {
-                Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
-                    "Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH", this);
+                this.LogError("Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
                 return;
             }
 
             if (_comms is ISocketStatus && !_comms.IsConnected)
             {
-                Debug.LogMessage(Serilog.Events.LogEventLevel.Error,
-                    "Device is not connected. Please check the connection", this);
+                this.LogError("Device is not connected. Please check the connection");
                 return;
             }
 
@@ -211,9 +208,41 @@ namespace Essentials.Plugin.Netgear.Cli
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
             TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan acceptframe all"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanID}"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanID}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanId}"));
+            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanId}"));
             BackOut(3);
+        }
+
+        public void SetPortPoeState(string port, bool enabled)
+        {
+            if (_password == null)
+            {
+                this.LogError("Password is null. Please make sure to define the password property at the root properties level for RS232 or in the control.tcpSshProperties object for SSH");
+                return;
+            }
+
+            if (_comms is ISocketStatus && !_comms.IsConnected)
+            {
+                this.LogWarning("Device is not connected. Please check the connection");
+                return;
+            }
+
+            if (enabled)
+            {
+                EnableConfigMode();
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"poe"));
+                BackOut(2);
+                return;
+            }
+            else
+            {
+                EnableConfigMode();
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
+                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"no poe"));
+                BackOut(2);
+                return;
+            }
         }
 
         #endregion

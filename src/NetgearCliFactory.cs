@@ -55,13 +55,13 @@ namespace Essentials.Plugin.Netgear.Cli
         /// <seealso cref="PepperDash.Core.eControlMethod"/>
         public override EssentialsDevice BuildDevice(PepperDash.Essentials.Core.Config.DeviceConfig dc)
         {
-            Debug.Console(1, "[{0}] Factory Attempting to create new device from type: {1}", dc.Key, dc.Type);
+            Debug.LogInformation("[{0}] Factory Attempting to create new device from type: {1}", dc.Key, dc.Type);
 
             // get the plugin device properties configuration object & check for null 
             var propertiesConfig = dc.Properties.ToObject<NetgearCliConfigObject>();
             if (propertiesConfig == null)
             {
-                Debug.Console(0, "[{0}] Factory: failed to read properties config for {1}", dc.Key, dc.Name);
+                Debug.LogInformation("[{0}] Factory: failed to read properties config for {1}", dc.Key, dc.Name);
                 return null;
             }
 
@@ -70,7 +70,7 @@ namespace Essentials.Plugin.Netgear.Cli
             var comms = CommFactory.CreateCommForDevice(dc);
             if (comms == null)
             {
-                Debug.Console(1, "[{0}] Factory Notice: No control object present for device {1}", dc.Key, dc.Name);
+                Debug.LogError("[{0}] Factory Notice: No control object present for device {1}", dc.Key, dc.Name);
                 return null;
             }
             else
