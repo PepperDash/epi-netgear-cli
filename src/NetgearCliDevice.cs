@@ -1,4 +1,7 @@
-﻿using PepperDash.Core;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using PepperDash.Core;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
@@ -21,6 +24,10 @@ namespace Essentials.Plugin.Netgear.Cli
         /// It is often desirable to store the config
         /// </summary>
         private NetgearCliConfigObject _config;
+
+        private ConcurrentQueue<Session> sessions = new ConcurrentQueue<Session>();
+
+
 
 
         /// <summary>
@@ -119,8 +126,7 @@ namespace Essentials.Plugin.Netgear.Cli
 
             _comms = comms;
 
-            TransmitQueue = new GenericQueue($"{key}-txQueue", WAITTIMEMS,
-                Crestron.SimplSharpPro.CrestronThread.Thread.eThreadPriority.MediumPriority, 100);
+            TransmitQueue = new GenericQueue($"{key}-txQueue", Crestron.SimplSharpPro.CrestronThread.Thread.eThreadPriority.MediumPriority, 100);
 
             var socket = _comms as ISocketStatus;
             if (socket != null)
@@ -139,11 +145,20 @@ namespace Essentials.Plugin.Netgear.Cli
             }
         }
 
+        public event EventHandler<NetworkSwitchPortEventArgs> PortStateChanged;
+
         public override bool CustomActivate()
         {
             // wouldn't normally do this, but there are situations where commands are being sent to the switch as part of the post activation sequence. The SSH connection needs to be connected in those situations.
             Connect = true;
             return base.CustomActivate();
+        }
+
+        public override void Initialize()
+        {
+
+
+            base.Initialize();
         }
 
 
@@ -152,12 +167,52 @@ namespace Essentials.Plugin.Netgear.Cli
             if (e.Text.Contains("Password:"))
             {
                 TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
-            }
-
-            if (e.Text.Contains("Access denied"))
+            } else if (e.Text.Contains("Access denied"))
             {
                 Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Access Denied. Please check the password");
+            } else if (e.Text.Contains("#") || e.Text.Contains(">"))
+            {
+                // this is a very naive way to determine if the switch is ready for the next command. It would be better to implement a more robust solution that checks for specific prompts based on the current session state.
+                if (sessions.TryPeek(out var currentSession))
+                {
+                    if (currentSession.Messages.Count > 0)
+                    {
+                        var message = currentSession.Messages[0];
+                        currentSession.Messages.RemoveAt(0);
+                        TransmitQueue.Enqueue(message);
+                    }
+                    else
+                    {
+                        // all messages for the current session have been sent - fire completion event
+                        NetworkSwitchPortEventType changeType;
+
+                        if (currentSession.MethodName == "SetPortVlan")
+                        {
+                            changeType = NetworkSwitchPortEventType.VlanChanged;
+                        }
+                        else if (currentSession.MethodName == "SetPortPoeState")
+                        {
+                            changeType = currentSession.PortPoeState == true ? NetworkSwitchPortEventType.PoEEnabled : NetworkSwitchPortEventType.PoEDisabled;
+                        }
+                        else
+                        {
+                            this.LogWarning("Unknown session method name: {methodName}", currentSession.MethodName);
+                            return;
+                        }
+
+                        PortStateChanged?.Invoke(this, new NetworkSwitchPortEventArgs(currentSession.Port, changeType));
+
+                        sessions.TryDequeue(out _);
+
+                        // if there are more sessions in the queue, start the next one
+                        if (sessions.TryPeek(out var nextSession))
+                        {
+                            StartSession(nextSession);
+                        }
+                    }
+                }
             }
+
         }
 
         private void Socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
@@ -166,17 +221,51 @@ namespace Essentials.Plugin.Netgear.Cli
                 args.Client.ClientStatus.ToString());
         }
 
-        private void EnableConfigMode()
+        private List<IQueueMessage> EnableConfigMode()
         {
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, "config"));
+            return new List<IQueueMessage>() {new TransmitMessage(_comms, "enable"),
+            new TransmitMessage(_comms, "config")};
         }
 
-        private void BackOut(int numExits)
+        private List<IQueueMessage> BackOut(int numExits)
         {
+            var messages = new List<IQueueMessage>();
+
             for (int i = 0; i < numExits; i++)
             {
-                TransmitQueue.Enqueue(new TransmitMessage(_comms, "exit"));
+                messages.Add(new TransmitMessage(_comms, "exit"));
+            }
+
+            return messages;
+        }
+
+        private void StartSession(Session session)
+        {
+            NetworkSwitchPortEventType changeType;
+
+            if (session.MethodName == "SetPortVlan")
+            {
+                changeType = NetworkSwitchPortEventType.VlanChangeInProgress;
+            }
+            else if (session.MethodName == "SetPortPoeState")
+            {
+                changeType = session.PortPoeState == true
+                    ? NetworkSwitchPortEventType.PoeEnableInProgress
+                    : NetworkSwitchPortEventType.PoeDisableInProgress;
+            }
+            else
+            {
+                this.LogWarning("Unknown session method name: {methodName}", session.MethodName);
+                return;
+            }
+
+            PortStateChanged?.Invoke(this, new NetworkSwitchPortEventArgs(session.Port, changeType));
+
+            if (session.Messages.Count > 0)
+            {
+                var message = session.Messages[0];
+                session.Messages.RemoveAt(0);
+                TransmitQueue.Enqueue(message);
             }
         }
 
@@ -204,13 +293,24 @@ namespace Essentials.Plugin.Netgear.Cli
                 return;
             }
 
-            EnableConfigMode();
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan acceptframe all"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan pvid {vlanId}"));
-            TransmitQueue.Enqueue(new TransmitMessage(_comms, $"vlan participation include {vlanId}"));
-            BackOut(3);
+            var messages = new List<IQueueMessage>();
+
+            messages.AddRange(EnableConfigMode());
+            messages.Add(new TransmitMessage(_comms, $"interface {port}"));
+            messages.Add(new TransmitMessage(_comms, $"vlan participation exclude 1-{MAX_VLANS}"));
+            messages.Add(new TransmitMessage(_comms, $"vlan acceptframe all"));
+            messages.Add(new TransmitMessage(_comms, $"vlan pvid {vlanId}"));
+            messages.Add(new TransmitMessage(_comms, $"vlan participation include {vlanId}"));
+            messages.AddRange(BackOut(3));
+
+            var session = new Session(port, "SetPortVlan", messages: messages);
+
+            sessions.Enqueue(session);
+
+            if (sessions.Count == 1)
+            {
+                StartSession(session);
+            }
         }
 
         public void SetPortPoeState(string port, bool enabled)
@@ -229,18 +329,36 @@ namespace Essentials.Plugin.Netgear.Cli
 
             if (enabled)
             {
-                EnableConfigMode();
-                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
-                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"poe"));
-                BackOut(2);
+                var messages = new List<IQueueMessage>();
+                messages.AddRange(EnableConfigMode());
+                messages.Add(new TransmitMessage(_comms, $"interface {port}"));
+                messages.Add(new TransmitMessage(_comms, $"poe"));
+                messages.AddRange(BackOut(2));
+                var session = new Session(port, "SetPortPoeState", portPoeState: enabled, messages: messages);
+                sessions.Enqueue(session);
+
+                if (sessions.Count == 1)
+                {
+                    StartSession(session);
+                }
+
                 return;
             }
             else
             {
-                EnableConfigMode();
-                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"interface {port}"));
-                TransmitQueue.Enqueue(new TransmitMessage(_comms, $"no poe"));
-                BackOut(2);
+                var messages = new List<IQueueMessage>();
+                messages.AddRange(EnableConfigMode());
+                messages.Add(new TransmitMessage(_comms, $"interface {port}"));
+                messages.Add(new TransmitMessage(_comms, $"no poe"));
+                messages.AddRange(BackOut(2));
+                var session = new Session(port, "SetPortPoeState", portPoeState: enabled, messages: messages);
+                sessions.Enqueue(session);
+
+                if (sessions.Count == 1)
+                {
+                    StartSession(session);
+                }
+
                 return;
             }
         }
