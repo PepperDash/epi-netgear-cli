@@ -154,14 +154,6 @@ namespace Essentials.Plugin.Netgear.Cli
             return base.CustomActivate();
         }
 
-        public override void Initialize()
-        {
-
-
-            base.Initialize();
-        }
-
-
         private void _comms_TextReceived(object sender, GenericCommMethodReceiveTextArgs e)
         {
             if (e.Text.Contains("Password:"))
@@ -274,11 +266,13 @@ namespace Essentials.Plugin.Netgear.Cli
             SetPortVlan(port, (uint)vlanID);
         }
 
+        /// <inheritdoc />
         public int GetPortCurrentVlan(string port)
         {
             throw new System.NotImplementedException();
         }
 
+        /// <inheritdoc />
         public void SetPortVlan(string port, uint vlanId)
         {
             if (_password == null)
@@ -313,6 +307,8 @@ namespace Essentials.Plugin.Netgear.Cli
             }
         }
 
+
+        /// <inheritdoc />
         public void SetPortPoeState(string port, bool enabled)
         {
             if (_password == null)
