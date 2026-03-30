@@ -33,3 +33,62 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 }
 ```
 
+<!-- START Minimum Essentials Framework Versions -->
+### Minimum Essentials Framework Versions
+
+- 2.0.0
+<!-- END Minimum Essentials Framework Versions -->
+<!-- START Config Example -->
+### Config Example
+
+```json
+{
+    "key": "GeneratedKey",
+    "uid": 1,
+    "name": "GeneratedName",
+    "type": "NetgearCli",
+    "group": "Group",
+    "properties": {
+        "control": "SampleValue",
+        "password": "SampleString"
+    }
+}
+```
+<!-- END Config Example -->
+<!-- START Supported Types -->
+### Supported Types
+
+- NetgearCli
+<!-- END Supported Types -->
+<!-- START Join Maps -->
+
+<!-- END Join Maps -->
+<!-- START Interfaces Implemented -->
+### Interfaces Implemented
+
+- IQueueMessage
+- INetworkSwitchPoeVlanManager
+<!-- END Interfaces Implemented -->
+<!-- START Base Classes -->
+### Base Classes
+
+- EssentialsDevice
+<!-- END Base Classes -->
+<!-- START Public Methods -->
+### Public Methods
+
+- public void Dispatch()
+- public void ChangeVlan(string port, int vlanID)
+- public int GetPortCurrentVlan(string port)
+- public void SetPortVlan(string port, uint vlanId)
+- public void SetPortPoeState(string port, bool enabled)
+<!-- END Public Methods -->
+<!-- START Bool Feedbacks -->
+
+<!-- END Bool Feedbacks -->
+<!-- START Int Feedbacks -->
+
+<!-- END Int Feedbacks -->
+<!-- START String Feedbacks -->
+
+<!-- END String Feedbacks -->
