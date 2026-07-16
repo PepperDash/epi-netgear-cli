@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
@@ -27,8 +28,16 @@ namespace Essentials.Plugin.Netgear.Cli
 
         private ConcurrentQueue<Session> sessions = new ConcurrentQueue<Session>();
 
+        /// <summary>
+        /// Synchronizes access to the session queue so the "start when first enqueued" decision and
+        /// the completion/advance logic cannot race across the caller thread and the comms thread.
+        /// </summary>
+        private readonly object _sessionLock = new object();
 
-
+        /// <summary>
+        /// Last-known access VLAN per port, updated when a SetPortVlan session completes.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, int> _portVlanCache = new ConcurrentDictionary<string, int>();
 
         /// <summary>
         /// Returns the password from the config object or the control object
@@ -151,6 +160,7 @@ namespace Essentials.Plugin.Netgear.Cli
         {
             // wouldn't normally do this, but there are situations where commands are being sent to the switch as part of the post activation sequence. The SSH connection needs to be connected in those situations.
             Connect = true;
+
             return base.CustomActivate();
         }
 
@@ -159,52 +169,75 @@ namespace Essentials.Plugin.Netgear.Cli
             if (e.Text.Contains("Password:"))
             {
                 TransmitQueue.Enqueue(new TransmitMessage(_comms, _password));
-            } else if (e.Text.Contains("Access denied"))
-            {
-                Debug.LogMessage(Serilog.Events.LogEventLevel.Error, "Access Denied. Please check the password");
-            } else if (e.Text.Contains("#") || e.Text.Contains(">"))
-            {
-                // this is a very naive way to determine if the switch is ready for the next command. It would be better to implement a more robust solution that checks for specific prompts based on the current session state.
-                if (sessions.TryPeek(out var currentSession))
-                {
-                    if (currentSession.Messages.Count > 0)
-                    {
-                        var message = currentSession.Messages[0];
-                        currentSession.Messages.RemoveAt(0);
-                        TransmitQueue.Enqueue(message);
-                    }
-                    else
-                    {
-                        // all messages for the current session have been sent - fire completion event
-                        NetworkSwitchPortEventType changeType;
-
-                        if (currentSession.MethodName == "SetPortVlan")
-                        {
-                            changeType = NetworkSwitchPortEventType.VlanChanged;
-                        }
-                        else if (currentSession.MethodName == "SetPortPoeState")
-                        {
-                            changeType = currentSession.PortPoeState == true ? NetworkSwitchPortEventType.PoEEnabled : NetworkSwitchPortEventType.PoEDisabled;
-                        }
-                        else
-                        {
-                            this.LogWarning("Unknown session method name: {methodName}", currentSession.MethodName);
-                            return;
-                        }
-
-                        PortStateChanged?.Invoke(this, new NetworkSwitchPortEventArgs(currentSession.Port, changeType));
-
-                        sessions.TryDequeue(out _);
-
-                        // if there are more sessions in the queue, start the next one
-                        if (sessions.TryPeek(out var nextSession))
-                        {
-                            StartSession(nextSession);
-                        }
-                    }
-                }
+                return;
             }
 
+            if (e.Text.Contains("Access denied"))
+            {
+                this.LogError("Access Denied. Please check the password");
+                return;
+            }
+
+            // Netgear paginates long output with "--More-- or (q)uit", which contains no command prompt
+            // and would otherwise stall the session. Send a space to page through until the prompt returns.
+            if (e.Text.Contains("--More--"))
+            {
+                _comms.SendText(" ");
+                return;
+            }
+
+            // Surface command-level errors so a command that was accepted by the parser but rejected by
+            // the switch is not silently reported as a successful state change. The session is still
+            // allowed to advance on the following prompt so the pipeline does not stall.
+            if (ContainsCommandError(e.Text))
+            {
+                this.LogWarning("Switch reported a command error: {response}", e.Text.Trim());
+            }
+
+            // A device prompt indicates the switch is ready for the next command. Netgear managed
+            // switches render the prompt as the system name in parentheses followed by the mode symbol,
+            // e.g. "(M4250-...)#", "(name)(Config)#", or "(name)>". Anchor on ")" + optional space +
+            // "#"/">" so a stray '#'/'>' inside output is not mistaken for a prompt, while still
+            // tolerating firmware variants that put whitespace before the symbol (e.g. "(name) #").
+            if (!Regex.IsMatch(e.Text, @"\)\s*[#>]"))
+            {
+                return;
+            }
+
+            Session completed = null;
+            Session sessionToStart = null;
+
+            // Only queue mutations are performed under the lock. Events are raised outside the lock
+            // because PortStateChanged handlers (e.g. CameraManager) call back into SetPortPoeState /
+            // SetPortVlan, which re-enter this lock and would otherwise deadlock.
+            lock (_sessionLock)
+            {
+                if (!sessions.TryPeek(out var currentSession))
+                {
+                    // No active session - this prompt is from login/idle, ignore it.
+                    return;
+                }
+
+                if (currentSession.Messages.Count > 0)
+                {
+                    var message = currentSession.Messages[0];
+                    currentSession.Messages.RemoveAt(0);
+                    TransmitQueue.Enqueue(message);
+                    return;
+                }
+
+                // All messages for the current session have been sent - the session is complete.
+                completed = currentSession;
+                sessions.TryDequeue(out _);
+                sessions.TryPeek(out sessionToStart);
+            }
+
+            OnSessionCompleted(completed);
+
+            if (sessionToStart != null)
+            {
+                StartSession(sessionToStart);
+            }
         }
 
         private void Socket_ConnectionChange(object sender, GenericSocketStatusChageEventArgs args)
@@ -261,6 +294,84 @@ namespace Essentials.Plugin.Netgear.Cli
             }
         }
 
+        /// <summary>
+        /// Enqueues a session and starts it if it is the only one queued. The enqueue and the
+        /// "is this the only session" decision are performed atomically so concurrent callers cannot
+        /// both skip starting the pipeline (which would stall the queue).
+        /// </summary>
+        private void EnqueueSession(Session session)
+        {
+            bool startNow;
+
+            lock (_sessionLock)
+            {
+                sessions.Enqueue(session);
+                startNow = sessions.Count == 1;
+            }
+
+            if (startNow)
+            {
+                StartSession(session);
+            }
+        }
+
+        /// <summary>
+        /// Raises the completion PortStateChanged event for a drained session and updates the cached
+        /// port VLAN when a SetPortVlan session completes. Must be called outside <see cref="_sessionLock"/>.
+        /// </summary>
+        private void OnSessionCompleted(Session session)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            NetworkSwitchPortEventType changeType;
+
+            if (session.MethodName == "SetPortVlan")
+            {
+                if (session.TargetVlan.HasValue)
+                {
+                    _portVlanCache[session.Port] = (int)session.TargetVlan.Value;
+                }
+
+                changeType = NetworkSwitchPortEventType.VlanChanged;
+            }
+            else if (session.MethodName == "SetPortPoeState")
+            {
+                changeType = session.PortPoeState == true
+                    ? NetworkSwitchPortEventType.PoEEnabled
+                    : NetworkSwitchPortEventType.PoEDisabled;
+            }
+            else
+            {
+                this.LogWarning("Unknown session method name: {methodName}", session.MethodName);
+                return;
+            }
+
+            PortStateChanged?.Invoke(this, new NetworkSwitchPortEventArgs(session.Port, changeType));
+        }
+
+        /// <summary>
+        /// Best-effort detection of common Netgear CLI error responses so a rejected command can be logged.
+        /// </summary>
+        private static bool ContainsCommandError(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            // Match phrase-specific error responses rather than loose substrings. A bare "Invalid"
+            // check falsely tripped on valid output such as "Invalid Signature Counter" in
+            // `show poe port info`, so use the actual error phrases the switch emits.
+            return text.IndexOf("% ", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("Command not found", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("Incomplete command", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("invalid interface", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("Unrecognized command", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public void ChangeVlan(string port, int vlanID)
         {
             SetPortVlan(port, (uint)vlanID);
@@ -269,7 +380,14 @@ namespace Essentials.Plugin.Netgear.Cli
         /// <inheritdoc />
         public int GetPortCurrentVlan(string port)
         {
-            throw new System.NotImplementedException();
+            // Returns the last VLAN this device applied to the port, or -1 when the port has not been
+            // set yet. Per the interface contract, -1 signals "unavailable".
+            if (!string.IsNullOrEmpty(port) && _portVlanCache.TryGetValue(port, out var vlan))
+            {
+                return vlan;
+            }
+
+            return -1;
         }
 
         /// <inheritdoc />
@@ -297,14 +415,12 @@ namespace Essentials.Plugin.Netgear.Cli
             messages.Add(new TransmitMessage(_comms, $"vlan participation include {vlanId}"));
             messages.AddRange(BackOut(3));
 
-            var session = new Session(port, "SetPortVlan", messages: messages);
-
-            sessions.Enqueue(session);
-
-            if (sessions.Count == 1)
+            var session = new Session(port, "SetPortVlan", messages: messages)
             {
-                StartSession(session);
-            }
+                TargetVlan = vlanId
+            };
+
+            EnqueueSession(session);
         }
 
 
@@ -331,12 +447,7 @@ namespace Essentials.Plugin.Netgear.Cli
                 messages.Add(new TransmitMessage(_comms, $"poe"));
                 messages.AddRange(BackOut(2));
                 var session = new Session(port, "SetPortPoeState", portPoeState: enabled, messages: messages);
-                sessions.Enqueue(session);
-
-                if (sessions.Count == 1)
-                {
-                    StartSession(session);
-                }
+                EnqueueSession(session);
 
                 return;
             }
@@ -348,12 +459,7 @@ namespace Essentials.Plugin.Netgear.Cli
                 messages.Add(new TransmitMessage(_comms, $"no poe"));
                 messages.AddRange(BackOut(2));
                 var session = new Session(port, "SetPortPoeState", portPoeState: enabled, messages: messages);
-                sessions.Enqueue(session);
-
-                if (sessions.Count == 1)
-                {
-                    StartSession(session);
-                }
+                EnqueueSession(session);
 
                 return;
             }

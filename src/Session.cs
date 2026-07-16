@@ -40,6 +40,11 @@ namespace Essentials.Plugin.Netgear.Cli
         public bool? PortPoeState { get; set; }
 
         /// <summary>
+        /// The target access VLAN ID for a SetPortVlan session. Used to update the cached port VLAN when the session completes.
+        /// </summary>
+        public uint? TargetVlan { get; set; }
+
+        /// <summary>
         /// The date and time when the session was created.
         /// </summary>
         public DateTime CreatedAt { get; set; }
