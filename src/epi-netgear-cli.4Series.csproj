@@ -1,38 +1,35 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<ProjectType>ProgramLibrary</ProjectType>
-	</PropertyGroup>
-	<PropertyGroup>
-		<TargetFramework>net472</TargetFramework>
-		<RootNamespace>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</RootNamespace>
-		<Deterministic>false</Deterministic>
-		<AssemblyTitle>EPI.Netgear.CLI</AssemblyTitle>
-		<Company>PepperDash Technologies</Company>
-		<Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control of Sony Bravia Displays.</Description>
-		<Copyright>Copyright 2024</Copyright>
-		<Version>1.0.0-local</Version>
-		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-		<InformationalVersion>$(Version)</InformationalVersion>
-		<OutputPath>4Series\bin\$(Configuration)\</OutputPath>
-		<Authors>PepperDash Technologies</Authors>
-		<PackageId>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</PackageId>
-		<PackageProjectUrl>https://github.com/PepperDash/epi-netgear-cli.git</PackageProjectUrl>
-		<PackageTags>crestron 4series Netgear cli</PackageTags>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<Compile Remove="Properties\**" />
-		<EmbeddedResource Remove="Properties\**" />
-		<None Remove="Properties\**" />
-	</ItemGroup>
-
-	<ItemGroup>
-    <PackageReference Include="PepperDashEssentials" Version="2.5.1" >
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectType>ProgramLibrary</ProjectType>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <RootNamespace>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</RootNamespace>
+    <Deterministic>false</Deterministic>
+    <AssemblyTitle>EPI.Netgear.CLI</AssemblyTitle>
+    <Company>PepperDash Technologies</Company>
+    <Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control of Sony Bravia Displays.</Description>
+    <Copyright>Copyright 2024</Copyright>
+    <Version>1.0.0-local</Version>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <OutputPath>4Series\bin\$(Configuration)\</OutputPath>
+    <Authors>PepperDash Technologies</Authors>
+    <PackageId>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</PackageId>
+    <PackageProjectUrl>https://github.com/PepperDash/epi-netgear-cli.git</PackageProjectUrl>
+    <PackageTags>crestron 4series Netgear cli</PackageTags>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Properties\**" />
+    <EmbeddedResource Remove="Properties\**" />
+    <None Remove="Properties\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="PepperDashEssentials" Version="2.29.0-feature-add-network-switch-poe-interfaces.4">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-	</ItemGroup>
+  </ItemGroup>
 </Project>

@@ -58,6 +58,14 @@ namespace Essentials.Plugin.Netgear.Cli
         /// </summary>
         [JsonProperty("password")]
         public string Password { get; set; }
+
+        /// <summary>
+        /// Maximum number of times "enable" is (re)issued to reach Privileged EXEC ("#") before the
+        /// driver gives up and bounces the connection to recover. Optional; values &lt;= 0 fall back to
+        /// the driver default (3).
+        /// </summary>
+        [JsonProperty("maxEnableAttempts")]
+        public int MaxEnableAttempts { get; set; }
     }
 
 }
