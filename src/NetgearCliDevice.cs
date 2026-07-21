@@ -77,6 +77,29 @@ namespace Essentials.Plugin.Netgear.Cli
         private const int WAITTIMEMS = 2000;
         public const int MAX_VLANS = 4093;
 
+        /// <summary>
+        /// Default number of "enable" attempts used when config omits (or sets &lt;= 0) maxEnableAttempts.
+        /// </summary>
+        private const int DefaultMaxEnableAttempts = 3;
+
+        /// <summary>
+        /// Number of consecutive "enable" attempts issued since the switch was last confirmed at
+        /// Privileged EXEC ("#"). Reset to 0 whenever a "#" prompt is observed or the socket connects.
+        /// </summary>
+        private int _enableAttempts;
+
+        /// <summary>
+        /// Guards against issuing more than one connection bounce per enable-exhaustion episode while
+        /// the disconnect/reconnect is in flight.
+        /// </summary>
+        private bool _bounceInProgress;
+
+        /// <summary>
+        /// Resolved maximum enable attempts, honoring config and falling back to the driver default.
+        /// </summary>
+        private int MaxEnableAttempts =>
+            _config.MaxEnableAttempts > 0 ? _config.MaxEnableAttempts : DefaultMaxEnableAttempts;
+
 
         /// <summary>
         /// Connects/disconnects the comms of the plugin device
@@ -204,6 +227,33 @@ namespace Essentials.Plugin.Netgear.Cli
                 return;
             }
 
+            // Park-at-"#" model: every session assumes the switch is already at Privileged EXEC.
+            // "enable" is therefore never a session command (which used to lose its leading byte in the
+            // brief not-read-ready window after a prompt/mode change). Instead it is issued here, once,
+            // in response to a settled login/idle prompt. A "#" prompt means we are privileged and ready;
+            // a ">" prompt means we must (re)issue "enable" before any session work can proceed.
+            bool privileged = Regex.IsMatch(e.Text, @"\)\s*#");
+            if (!privileged)
+            {
+                if (_enableAttempts < MaxEnableAttempts)
+                {
+                    _enableAttempts++;
+                    this.LogInformation("At User EXEC; issuing enable ({attempt}/{max})", _enableAttempts, MaxEnableAttempts);
+                    TransmitQueue.Enqueue(new TransmitMessage(_comms, "enable"));
+                    return;
+                }
+
+                // Exhausted enable attempts: the CLI is wedged at User EXEC. Strategy B - abort any
+                // queued sessions (no success events are raised, so upstream is never told a failed port
+                // succeeded) and bounce the connection. AutoReconnect returns us to a clean login prompt
+                // where the one-time enable runs again from a settled state.
+                AbortSessionsAndBounce();
+                return;
+            }
+
+            // Confirmed at Privileged EXEC.
+            _enableAttempts = 0;
+
             Session completed = null;
             Session sessionToStart = null;
 
@@ -244,12 +294,63 @@ namespace Essentials.Plugin.Netgear.Cli
         {
             Debug.LogMessage(Serilog.Events.LogEventLevel.Information, "Socket Status Change: {status}", this,
                 args.Client.ClientStatus.ToString());
+
+            if (args.Client.IsConnected)
+            {
+                // Fresh connection lands at the login/User EXEC prompt; the prompt handler will issue the
+                // one-time enable. Reset the recovery state so a prior exhaustion does not carry over.
+                _enableAttempts = 0;
+                _bounceInProgress = false;
+                return;
+            }
+
+            // Disconnected: any queued sessions are stale (mode/ordering assumptions are void and the
+            // upstream CameraManager re-drives on its next reconciliation). Clear them so they do not run
+            // against a freshly reconnected switch.
+            ClearSessions("connection dropped");
+        }
+
+        /// <summary>
+        /// Aborts all queued sessions without raising success events and bounces the connection so
+        /// AutoReconnect returns the switch to a clean login prompt where the one-time enable re-runs.
+        /// </summary>
+        private void AbortSessionsAndBounce()
+        {
+            if (_bounceInProgress)
+            {
+                return;
+            }
+
+            _bounceInProgress = true;
+
+            this.LogError("Could not reach Privileged EXEC after {max} enable attempts; bouncing connection to recover", MaxEnableAttempts);
+
+            ClearSessions("enable attempts exhausted");
+
+            Connect = false; // AutoReconnect brings the socket back to a clean login prompt.
+        }
+
+        /// <summary>
+        /// Removes all queued sessions under the session lock, logging each abandoned port. No completion
+        /// events are raised, so upstream consumers are never told a failed port succeeded.
+        /// </summary>
+        private void ClearSessions(string reason)
+        {
+            lock (_sessionLock)
+            {
+                while (sessions.TryDequeue(out var abandoned))
+                {
+                    this.LogWarning("Abandoning {method} session for port {port} ({reason})",
+                        abandoned.MethodName, abandoned.Port, reason);
+                }
+            }
         }
 
         private List<IQueueMessage> EnableConfigMode()
         {
-            return new List<IQueueMessage>() {new TransmitMessage(_comms, "enable"),
-            new TransmitMessage(_comms, "config")};
+            // "enable" is intentionally omitted - the switch is parked at Privileged EXEC "#" between
+            // sessions and enable is issued once per connection by the prompt handler. Only enter config.
+            return new List<IQueueMessage>() { new TransmitMessage(_comms, "config") };
         }
 
         private List<IQueueMessage> BackOut(int numExits)
@@ -413,7 +514,7 @@ namespace Essentials.Plugin.Netgear.Cli
             messages.Add(new TransmitMessage(_comms, $"vlan acceptframe all"));
             messages.Add(new TransmitMessage(_comms, $"vlan pvid {vlanId}"));
             messages.Add(new TransmitMessage(_comms, $"vlan participation include {vlanId}"));
-            messages.AddRange(BackOut(3));
+            messages.AddRange(BackOut(2));
 
             var session = new Session(port, "SetPortVlan", messages: messages)
             {
