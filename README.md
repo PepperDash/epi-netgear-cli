@@ -36,7 +36,7 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 <!-- START Minimum Essentials Framework Versions -->
 ### Minimum Essentials Framework Versions
 
-- 2.0.0
+- 3.0.0-dev-v3-routing.63
 <!-- END Minimum Essentials Framework Versions -->
 <!-- START Config Example -->
 ### Config Example

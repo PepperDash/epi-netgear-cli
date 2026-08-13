@@ -2,13 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Threading;
 using PepperDash.Core;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.DeviceTypeInterfaces;
 using PepperDash.Essentials.Core.Queues;
 
-namespace Essentials.Plugin.Netgear.Cli
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Plugin device template for third party devices that use IBasicCommunication
@@ -158,7 +159,7 @@ namespace Essentials.Plugin.Netgear.Cli
 
             _comms = comms;
 
-            TransmitQueue = new GenericQueue($"{key}-txQueue", Crestron.SimplSharpPro.CrestronThread.Thread.eThreadPriority.MediumPriority, 100);
+            TransmitQueue = new GenericQueue($"{key}-txQueue", ThreadPriority.Normal, 100);
 
             var socket = _comms as ISocketStatus;
             if (socket != null)
@@ -179,7 +180,7 @@ namespace Essentials.Plugin.Netgear.Cli
 
         public event EventHandler<NetworkSwitchPortEventArgs> PortStateChanged;
 
-        public override bool CustomActivate()
+        protected override bool CustomActivate()
         {
             // wouldn't normally do this, but there are situations where commands are being sent to the switch as part of the post activation sequence. The SSH connection needs to be connected in those situations.
             Connect = true;

@@ -7,7 +7,7 @@ using PepperDash.Core;
 using PepperDash.Core.Logging;
 using PepperDash.Essentials.Core.Queues;
 
-namespace Essentials.Plugin.Netgear.Cli
+namespace PepperDash.Essentials.Plugins
 {
     internal class TransmitMessage: IQueueMessage
     {

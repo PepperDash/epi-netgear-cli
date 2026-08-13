@@ -3,7 +3,7 @@ using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using Crestron.SimplSharpPro.UI;
 
-namespace Essentials.Plugin.Netgear.Cli
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Plugin device factory for devices that use IBasicCommunication
@@ -36,7 +36,7 @@ namespace Essentials.Plugin.Netgear.Cli
         {
             // Set the minimum Essentials Framework Version
             // TODO [ ] Update the Essentials minimum framework version which this plugin has been tested against
-            MinimumEssentialsFrameworkVersion = "2.0.0";
+            MinimumEssentialsFrameworkVersion = "3.0.0-dev-v3-routing.63";
 
             // In the constructor we initialize the list with the typenames that will build an instance of this device
             // TODO [ ] Update the TypeNames for the plugin being developed
