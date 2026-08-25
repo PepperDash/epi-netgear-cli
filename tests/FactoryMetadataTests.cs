@@ -5,7 +5,7 @@ namespace NetgearCli.Tests;
 
 public class FactoryMetadataTests
 {
-    private const string ExpectedMinimumEssentialsFrameworkVersion = "3.0.0-dev-v3-routing.63";
+    private const string ExpectedMinimumEssentialsFrameworkVersion = "3.0.0";
 
     [Fact]
     public void Factory_Source_Sets_MinimumEssentialsFrameworkVersion()
