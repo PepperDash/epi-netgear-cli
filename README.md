@@ -36,7 +36,7 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 <!-- START Minimum Essentials Framework Versions -->
 ### Minimum Essentials Framework Versions
 
-- 3.0.0-dev-v3-routing.63
+- 3.0.0
 <!-- END Minimum Essentials Framework Versions -->
 <!-- START Config Example -->
 ### Config Example
@@ -50,7 +50,8 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
     "group": "Group",
     "properties": {
         "control": "SampleValue",
-        "password": "SampleString"
+        "password": "SampleString",
+        "maxEnableAttempts": 0
     }
 }
 ```
@@ -66,8 +67,8 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 <!-- START Interfaces Implemented -->
 ### Interfaces Implemented
 
-- IQueueMessage
 - INetworkSwitchPoeVlanManager
+- IQueueMessage
 <!-- END Interfaces Implemented -->
 <!-- START Base Classes -->
 ### Base Classes
@@ -77,11 +78,22 @@ The Vlan assignment is set by calling the ChangeVlan method via DevJson. A sampl
 <!-- START Public Methods -->
 ### Public Methods
 
-- public void Dispatch()
 - public void ChangeVlan(string port, int vlanID)
 - public int GetPortCurrentVlan(string port)
 - public void SetPortVlan(string port, uint vlanId)
 - public void SetPortPoeState(string port, bool enabled)
+- public void Dispatch()
+- public void Factory_Source_Sets_MinimumEssentialsFrameworkVersion()
+- public void Factory_Source_Sets_TypeNames()
+- public void Factory_Source_Contains_TypeName(string factoryClassName, string typeName)
+- public void Assembly_Loads_Successfully()
+- public void Assembly_Name_Matches_Expected()
+- public void Factory_Count_Matches_Expected()
+- public void Factory_Exists_ByName(string factoryClassName)
+- public void All_Factories_Have_Parameterless_Constructor()
+- public void Config_Class_Exists()
+- public void Config_Has_Parameterless_Constructor()
+- public void Config_Property_Has_JsonPropertyAttribute(string propertyName, string jsonName)
 <!-- END Public Methods -->
 <!-- START Bool Feedbacks -->
 
