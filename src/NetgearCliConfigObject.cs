@@ -2,7 +2,7 @@
 using Newtonsoft.Json;
 using PepperDash.Essentials.Core;
 
-namespace Essentials.Plugin.Netgear.Cli
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Plugin device configuration object

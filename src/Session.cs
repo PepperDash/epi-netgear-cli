@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using PepperDash.Essentials.Core.Queues;
 
-namespace Essentials.Plugin.Netgear.Cli
+namespace PepperDash.Essentials.Plugins
 {
     /// <summary>
     /// Represents a session for a specific port and method. This can be used to track active sessions and their creation time.

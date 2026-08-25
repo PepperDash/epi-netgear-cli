@@ -3,24 +3,22 @@
     <ProjectType>ProgramLibrary</ProjectType>
   </PropertyGroup>
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
-    <RootNamespace>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</RootNamespace>
+    <TargetFramework>net8</TargetFramework>
+    <RootNamespace>PepperDash.Essentials.Plugins</RootNamespace>
+    <AssemblyName>PepperDash.Essentials.Plugins.Netgear.CLI</AssemblyName>
     <Deterministic>false</Deterministic>
-    <AssemblyTitle>EPI.Netgear.CLI</AssemblyTitle>
+    <AssemblyTitle>PepperDash.Essentials.Plugins.Netgear.CLI</AssemblyTitle>
     <Company>PepperDash Technologies</Company>
-    <Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control of Sony Bravia Displays.</Description>
+    <Description>This software is a plugin designed to work as a part of PepperDash Essentials for Crestron control processors. This plugin allows for control of Netgear CLI-based network switches.</Description>
     <Copyright>Copyright 2024</Copyright>
     <Version>1.0.0-local</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <InformationalVersion>$(Version)</InformationalVersion>
     <OutputPath>4Series\bin\$(Configuration)\</OutputPath>
     <Authors>PepperDash Technologies</Authors>
-    <PackageId>Pepperdash.Essentials.Plugins.Switcher.Netgear.CLI</PackageId>
+    <PackageId>PepperDash.Essentials.Plugins.Netgear.CLI</PackageId>
     <PackageProjectUrl>https://github.com/PepperDash/epi-netgear-cli.git</PackageProjectUrl>
     <PackageTags>crestron 4series Netgear cli</PackageTags>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DefineConstants>$(DefineConstants);SERIES4</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Properties\**" />
@@ -28,7 +26,7 @@
     <None Remove="Properties\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="PepperDashEssentials" Version="2.29.0-feature-add-network-switch-poe-interfaces.4">
+    <PackageReference Include="PepperDashEssentials" Version="3.0.0-feat-update-ihaswebview.1">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>
